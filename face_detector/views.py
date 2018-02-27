@@ -45,9 +45,9 @@ def detect(request):
         
         
         from time import time
-        ti=time()
+        t1=time()
         obj=object_detect(cv.imread(y))
-        print(time()-ti)
+        print(time()-t1)
         img=lanedetect(obj)
 
 
