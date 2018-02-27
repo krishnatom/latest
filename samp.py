@@ -5,7 +5,7 @@ import cv2
 import json
 
 # define the URL to our face detection API
-url = "http://localhost:8000/detect/"
+url = "http://blindfolded.herokuapp.com/detect/"
 
 # use our face detection API to find faces in images via image URL
 '''
