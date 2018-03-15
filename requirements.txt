@@ -4,8 +4,11 @@ certifi==2018.1.18
 chardet==3.0.4
 Cython==0.27.3
 dj-database-url==0.4.2
+dj-static==0.0.6
 Django==2.0.2
 django-heroku==0.2.0
+django-toolbelt==0.0.1
+gunicorn==19.7.1
 html5lib==0.9999999
 idna==2.6
 image==1.5.19
@@ -20,8 +23,10 @@ python-dateutil==2.6.1
 pytz==2018.3
 requests==2.18.4
 six==1.11.0
+static3==0.7.0
 tensorflow-gpu==1.5.0
 tensorflow-tensorboard==1.5.1
 urllib3==1.22
 Werkzeug==0.14.1
 whitenoise==3.3.1
+
