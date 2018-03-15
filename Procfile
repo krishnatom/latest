@@ -1,1 +1,1 @@
-web: gunicorn temp.wsgi --log-file - 
+web: gunicorn cv_api.wsgi --log-file - 
