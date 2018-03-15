@@ -5,7 +5,7 @@ import cv2
 import json
 
 # define the URL to our face detection API
-url = "http://blindfolded.herokuapp.com/detect/"
+url = "http://localhost:8000/detect/"
 
 # use our face detection API to find faces in images via image URL
 '''
@@ -24,7 +24,7 @@ while(True):
     count=count+1
     print(count)
 '''
-for i in range(1,8):
+for i in range(1,7):
 
 	files = {'media': open("test%d.jpg"%i, 'rb')}
 	r = requests.post(url, files=files).json()

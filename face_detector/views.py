@@ -17,9 +17,88 @@ import io
 import glob
 import threading
 from darkflow.net.build import TFNet 
+import math
 # define the path to the face detector
 '''fourcc = cv2.VideoWriter_fourcc(*'XVID')
 out = cv2.VideoWriter('output.mp4',fourcc, 20.0, (640,480))'''
+
+
+#global pt
+class Obstacles:
+    def assign(self,label=None,confidence=None,topleft_x=None,topleft_y=None,bottomright_x=None,bottomright_y=None):
+        print("testing assugn")
+        self.label=label
+        self.confidence=confidence
+        self.topleft_x=topleft_x
+        self.topleft_y=topleft_y
+        self.bottomright_x=bottomright_x
+        self.bottomright_y=bottomright_y
+        #self.middle_x=int((bottomright_x+topleft_x)/2)
+        self.middle_x=calc_middle(bottomright_x,topleft_x)
+        #self.middle_y=int((bottomright_y+topleft_x)/2)
+        self.middle_y=calc_middle(bottomright_y,topleft_y)
+        self.left=[topleft_x,bottomright_y]
+        self.right=[bottomright_x,bottomright_y]
+
+
+        
+        
+    
+    def assign_dist(self,distance=None):
+        print("Assign Distance Function called  ",distance)
+        print()
+        self.distance=distance
+
+    '''def assign_offset(self):
+        obj_offset=lane_center - self.middle_x
+        if(obj_offset<0):
+            self.offset="L"'''
+
+
+    def contents(self):
+        print("testing contents")
+        print("label",self.label,"\nconfidence",self.confidence,"\ntopleft",self.topleft_x,"topleft_y",self.topleft_y,
+            "bottomright_x",self.bottomright_x,"bottomright_y",self.bottomright_y,"middle_x",self.middle_x,"middle_y",self.middle_y,"distance",self.distance)
+
+    
+def calc_middle(x,y):
+    print("calc_middle function is called  ",int((x+y)/2))
+    return int((x+y)/2)
+
+
+
+
+    
+def calc_distance(x,y):
+    a=np.array([x,y])
+    print("calc_distance function is called   ",pt,x,y)
+    try:
+        distance=np.linalg.norm(pt-a)
+    except Exception as e:
+        print("Exception in calc distance")
+        print(e)
+    return distance
+
+
+
+def find_nearest_obstacle(lst):
+    print("nearest Obstacles function is called")
+    try:
+        obj=[]
+        for l in lst:
+            obj.append(l.__dict__)
+        from operator import itemgetter
+        nearest_obstacle=sorted(obj,key=itemgetter('distance'))
+        for k in nearest_obstacle:
+            print("Obstacle sorted by distance")
+            print(k)
+    except Exception as e:
+        print(e)
+        return None
+    return nearest_obstacle[0]
+
+
+
 points_pickle = pickle.load( open( "object_and_image_points.pkl", "rb" ) )
 chess_points = points_pickle["chesspoints"]
 image_points = points_pickle["imagepoints"]
@@ -29,8 +108,19 @@ camera = pickle.load(open( "camera_matrix.pkl", "rb" ))
 mtx = camera['mtx']
 dist = camera['dist']
 camera_img_size = camera['imagesize']
+
+
 options = {"model": "cfg/yolo.cfg", "load": "bin/yolo.weights", "threshold": 0.1}
 
+
+print("camera calibration.pkl contents\n",camera)
+print()
+print()
+print()
+print()
+print()
+print()
+print()
 tfnet = TFNet(options)
 
 #global first_frame
@@ -46,9 +136,66 @@ def detect(request):
         
         from time import time
         t1=time()
-        obj=object_detect(cv.imread(y))
+        im=cv2.resize(cv.imread(y),(1280,720))
+        obj,lst=object_detect(im)
         print(time()-t1)
+        print("before calling lane detection function")
+        print()
+        print()
+        print()
         img=lanedetect(obj)
+        print("After lane deetection function")
+        try:
+            print("the object list",lst)
+            print()
+            try:
+                print("length of object list",len(lst))
+            except Exception as e:
+                print(e)
+            print()
+            print()
+        except Exception as e:
+            print(e)
+
+        for l in lst:
+            print("Obstacle assigning middle vertex to object.......")
+            print("Obstacles  ",l.label,"\n")
+            l.assign_dist(calc_distance(l.middle_x,l.middle_y))
+            #l.assign_offset()
+
+            print("Inside the detect main function")
+            l.contents()
+
+        print("Printing all distances")
+        for l in lst:
+            print("distance of obstacles")
+            print(l.distance)
+        try:
+            print("Printing lst")
+            print(lst)
+            print(type(lst))
+            nearest_obstacle=find_nearest_obstacle(lst)
+            print("printing nearest obstacle information\n")
+            print(nearest_obstacle)
+            print()
+        except Exception as e:
+            print("In calling function")
+            print(e)
+        try:
+            print(type(nearest_obstacle))
+        except Exception as e:
+            print(e)
+        try:
+            cv2.line(img,(int(pt[0]),int(pt[1])),(nearest_obstacle['middle_x'],nearest_obstacle['middle_y']),5)
+            
+        except Exception as e:
+            print(e)
+
+        
+
+
+
+
 
 
         cv2.imshow("image",img)
@@ -60,14 +207,29 @@ def detect(request):
         data['success']=True
     return JsonResponse(data)
 
+
+
+
+
+
 def object_detect(frame=None):
     result = tfnet.return_predict(frame)
     font = cv2.FONT_HERSHEY_SIMPLEX
+    lst = [Obstacles() for i in range(len(result))]
+    count=0
     for results in result:
         print(results)
+        lst[count].assign(results['label'],results['confidence'],results['topleft']['x'],results['topleft']['y'],results['bottomright']['x'],results['bottomright']['y'])
+        
         cv2.rectangle(frame, (results['topleft']['x'], results['topleft']['y']), (results['bottomright']['x'], results['bottomright']['y']),(255,0,0), 2)
         cv2.putText(frame,str(results['label']),(results['topleft']['x'], results['topleft']['y']), font, 1, (0,0,0), 1, cv2.LINE_AA)
-    return frame
+        print("Successfully drawn the bounding box for obstacle number",count)
+        count=count+1
+    print("Exiting the object detect function")
+    print()
+    print()
+    print()
+    return frame,lst
 
 
 
@@ -80,20 +242,188 @@ def lanedetect(img):
     #perspective transform
     birdseye, inverse_perspective_transform = warp_image(binary_img)
     left_fit,right_fit = track_lanes_initialize(birdseye)
-   
-    #draw polygon
-    processed_frame = lane_fill_poly(birdseye, undist, left_fit, right_fit,inverse_perspective_transform)
-    curve_radius = measure_curve(birdseye,left_fit,right_fit)
-    offset = vehicle_offset(undist, left_fit, right_fit)
+    print("left_fit:",[int(x) for x in left_fit],"\nright fit",[int(y) for y in right_fit])
     
+    
+    global pt
+    #draw polygon
+    processed_frame , temp= lane_fill_poly(birdseye, undist, left_fit, right_fit,inverse_perspective_transform)
+    curve_radius = measure_curve(birdseye,left_fit,right_fit)
+    offset,pt = vehicle_offset(undist, left_fit, right_fit)
+    try:
+        cv2.circle(processed_frame,(int(pt[0]),int(pt[1])), 50, (255,0,0), -1)
+        cv.imshow("processed_frame",processed_frame)
+        cv.waitKey(0)
+    except:
+        print()
+        print()
+        print("Error marking the center camera location ",  int(pt[0]),int(pt[1]))
+        print()
+        print()
+        print()
+
+    print()
+    print()
+    print("Length of list",len(temp))
+    print(temp)
+    print()
+    print()
+    d=[]
+    for t in temp:
+        print("Outer loop",len(t))
+        print(t)
+        print()
+        for u in t:
+            print("second loop",len(u))
+            print()
+            d=t[0]
+            break;
+
+    print("value of d",type(d))
+    fi=open("tem.txt","w")
+    for b in d:
+        fi.write(str(b)+"\n")
+    fi.close()
+    try:
+        mini=np.amin(d,axis=0)
+        maxi=np.amax(d,axis=0)
+    except:
+        print("\n error finding min and max")
+    print("Minimun vertex",mini)
+    print()
+    print()
+    print("Maximum Vertices",maxi)
+    print()
+    print()
+    cv2.rectangle(processed_frame, (mini[0]-100,mini[1]), (maxi[0]-100,maxi[1]),(255,0,0), 2)
+    #for x in d:
+     #   cv2.circle(processed_frame,(x[0],x[1]), 10, (255,0,0), -1)
+
         
     #printing information to frame
     font = cv.FONT_HERSHEY_TRIPLEX
     processed_frame = cv.putText(processed_frame, 'Radius: '+str(curve_radius)+' m', (30, 40), font, 1, (0,255,0), 2)
     processed_frame = cv.putText(processed_frame, 'Offset: '+str(offset)+' m', (30, 80), font, 1, (0,255,0), 2)
    
-    
+    print("Exiting the lane detect function")
+    print()
+    print()
+    print()
+    print()
+    print()
     return processed_frame
+
+
+def track_lanes_initialize(binary_warped):
+    
+    global window_search
+    
+    histogram = np.sum(binary_warped[int(binary_warped.shape[0]/2):,:], axis=0)
+    
+    # Create an output image to draw on and  visualize the result
+    out_img = np.dstack((binary_warped, binary_warped, binary_warped))*255
+    
+    # we need max for each half of the histogram. the example above shows how
+    # things could be complicated if didn't split the image in half 
+    # before taking the top 2 maxes
+    midpoint = np.int(histogram.shape[0]/2)
+    leftx_base = np.argmax(histogram[:midpoint])
+    rightx_base = np.argmax(histogram[midpoint:]) + midpoint
+    
+    # Choose the number of sliding windows
+    # this will throw an error in the height if it doesn't evenly divide the img height
+    nwindows = 9
+    # Set height of windows
+    window_height = np.int(binary_warped.shape[0]/nwindows)
+    
+    # Identify the x and y positions of all nonzero pixels in the image
+    nonzero = binary_warped.nonzero()
+    nonzeroy = np.array(nonzero[0])
+    nonzerox = np.array(nonzero[1])
+    
+    # Current positions to be updated for each window
+    leftx_current = leftx_base
+    rightx_current = rightx_base
+    
+    # Set the width of the windows +/- margin
+    margin = 100
+    # Set minimum number of pixels found to recenter window
+    minpix = 50
+    # Create empty lists to receive left and right lane pixel indices
+    left_lane_inds = []
+    right_lane_inds = []
+    global win_left,win_right
+    win_left=win_right=[]
+    
+    # Step through the windows one by one
+    for window in range(nwindows):
+        # Identify window boundaries in x and y (and right and left)
+        win_y_low = int(binary_warped.shape[0] - (window+1)*window_height)
+        win_y_high = int(binary_warped.shape[0] - window*window_height)
+        win_xleft_low = leftx_current - margin
+        win_xleft_high = leftx_current + margin
+        win_xright_low = rightx_current - margin
+        win_xright_high = rightx_current + margin
+        # Draw the windows on the visualization image
+        cv.rectangle(out_img,(win_xleft_low,win_y_low),(win_xleft_high,win_y_high),(0,255,0), 3) 
+        
+        win_left.append([int((win_xleft_low+win_xleft_high)/2),int((win_y_low+win_y_high)/2)])
+        cv.rectangle(out_img,(win_xright_low,win_y_low),(win_xright_high,win_y_high),(0,255,0), 3) 
+        win_right.append([int((win_xright_low+win_xright_high)/2),int((win_y_low+win_y_high)/2)])
+        # Identify the nonzero pixels in x and y within the window
+        good_left_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & (nonzerox >= win_xleft_low) & (nonzerox < win_xleft_high)).nonzero()[0]
+        good_right_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & (nonzerox >= win_xright_low) & (nonzerox < win_xright_high)).nonzero()[0]
+        # Append these indices to the lists
+        left_lane_inds.append(good_left_inds)
+        right_lane_inds.append(good_right_inds)
+        # If you found > minpix pixels, recenter next window on their mean position
+        if len(good_left_inds) > minpix:
+            leftx_current = np.int(np.mean(nonzerox[good_left_inds]))
+        if len(good_right_inds) > minpix:        
+            rightx_current = np.int(np.mean(nonzerox[good_right_inds]))
+
+            
+    # Concatenate the arrays of indices
+    left_lane_inds = np.concatenate(left_lane_inds)
+    right_lane_inds = np.concatenate(right_lane_inds)
+
+
+    # Extract left and right line pixel positions
+    leftx = nonzerox[left_lane_inds]
+    lefty = nonzeroy[left_lane_inds] 
+    rightx = nonzerox[right_lane_inds]
+    righty = nonzeroy[right_lane_inds] 
+
+    # Fit a second order polynomial to each
+    left_fit = np.polyfit(lefty, leftx, 2)
+    right_fit = np.polyfit(righty, rightx, 2)
+    
+    # Generate x and y values for plotting
+    ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0] )
+    left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
+    right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
+
+    nonzero = binary_warped.nonzero()
+    nonzeroy = np.array(nonzero[0])
+    nonzerox = np.array(nonzero[1])
+    margin = 100
+    left_lane_inds = ((nonzerox > (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] - margin)) & (nonzerox < (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] + margin))) 
+    right_lane_inds = ((nonzerox > (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + right_fit[2] - margin)) & (nonzerox < (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + right_fit[2] + margin)))  
+
+    # Again, extract left and right line pixel positions
+    leftx = nonzerox[left_lane_inds]
+    lefty = nonzeroy[left_lane_inds] 
+    rightx = nonzerox[right_lane_inds]
+    righty = nonzeroy[right_lane_inds]
+    # Fit a second order polynomial to each
+    left_fit = np.polyfit(lefty, leftx, 2)
+    right_fit = np.polyfit(righty, rightx, 2)
+
+    return left_fit,right_fit
+
+
+
+
 
 def distort_correct(img,mtx,dist,camera_img_size):
     img_size1 = (img.shape[1],img.shape[0])
@@ -247,109 +577,6 @@ def warp_image(img):
     return warped_img, inverse_perspective_transform
 
 
-def track_lanes_initialize(binary_warped):
-    
-    global window_search
-    
-    histogram = np.sum(binary_warped[int(binary_warped.shape[0]/2):,:], axis=0)
-    
-    # Create an output image to draw on and  visualize the result
-    out_img = np.dstack((binary_warped, binary_warped, binary_warped))*255
-    
-    # we need max for each half of the histogram. the example above shows how
-    # things could be complicated if didn't split the image in half 
-    # before taking the top 2 maxes
-    midpoint = np.int(histogram.shape[0]/2)
-    leftx_base = np.argmax(histogram[:midpoint])
-    rightx_base = np.argmax(histogram[midpoint:]) + midpoint
-    
-    # Choose the number of sliding windows
-    # this will throw an error in the height if it doesn't evenly divide the img height
-    nwindows = 9
-    # Set height of windows
-    window_height = np.int(binary_warped.shape[0]/nwindows)
-    
-    # Identify the x and y positions of all nonzero pixels in the image
-    nonzero = binary_warped.nonzero()
-    nonzeroy = np.array(nonzero[0])
-    nonzerox = np.array(nonzero[1])
-    
-    # Current positions to be updated for each window
-    leftx_current = leftx_base
-    rightx_current = rightx_base
-    
-    # Set the width of the windows +/- margin
-    margin = 100
-    # Set minimum number of pixels found to recenter window
-    minpix = 50
-    # Create empty lists to receive left and right lane pixel indices
-    left_lane_inds = []
-    right_lane_inds = []
-    
-    
-    # Step through the windows one by one
-    for window in range(nwindows):
-        # Identify window boundaries in x and y (and right and left)
-        win_y_low = int(binary_warped.shape[0] - (window+1)*window_height)
-        win_y_high = int(binary_warped.shape[0] - window*window_height)
-        win_xleft_low = leftx_current - margin
-        win_xleft_high = leftx_current + margin
-        win_xright_low = rightx_current - margin
-        win_xright_high = rightx_current + margin
-        # Draw the windows on the visualization image
-        cv.rectangle(out_img,(win_xleft_low,win_y_low),(win_xleft_high,win_y_high),(0,255,0), 3) 
-        cv.rectangle(out_img,(win_xright_low,win_y_low),(win_xright_high,win_y_high),(0,255,0), 3) 
-        # Identify the nonzero pixels in x and y within the window
-        good_left_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & (nonzerox >= win_xleft_low) & (nonzerox < win_xleft_high)).nonzero()[0]
-        good_right_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & (nonzerox >= win_xright_low) & (nonzerox < win_xright_high)).nonzero()[0]
-        # Append these indices to the lists
-        left_lane_inds.append(good_left_inds)
-        right_lane_inds.append(good_right_inds)
-        # If you found > minpix pixels, recenter next window on their mean position
-        if len(good_left_inds) > minpix:
-            leftx_current = np.int(np.mean(nonzerox[good_left_inds]))
-        if len(good_right_inds) > minpix:        
-            rightx_current = np.int(np.mean(nonzerox[good_right_inds]))
-
-            
-    # Concatenate the arrays of indices
-    left_lane_inds = np.concatenate(left_lane_inds)
-    right_lane_inds = np.concatenate(right_lane_inds)
-
-    # Extract left and right line pixel positions
-    leftx = nonzerox[left_lane_inds]
-    lefty = nonzeroy[left_lane_inds] 
-    rightx = nonzerox[right_lane_inds]
-    righty = nonzeroy[right_lane_inds] 
-
-    # Fit a second order polynomial to each
-    left_fit = np.polyfit(lefty, leftx, 2)
-    right_fit = np.polyfit(righty, rightx, 2)
-    
-    # Generate x and y values for plotting
-    ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0] )
-    left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
-    right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
-
-    nonzero = binary_warped.nonzero()
-    nonzeroy = np.array(nonzero[0])
-    nonzerox = np.array(nonzero[1])
-    margin = 100
-    left_lane_inds = ((nonzerox > (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] - margin)) & (nonzerox < (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] + margin))) 
-    right_lane_inds = ((nonzerox > (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + right_fit[2] - margin)) & (nonzerox < (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + right_fit[2] + margin)))  
-
-    # Again, extract left and right line pixel positions
-    leftx = nonzerox[left_lane_inds]
-    lefty = nonzeroy[left_lane_inds] 
-    rightx = nonzerox[right_lane_inds]
-    righty = nonzeroy[right_lane_inds]
-    # Fit a second order polynomial to each
-    left_fit = np.polyfit(lefty, leftx, 2)
-    right_fit = np.polyfit(righty, rightx, 2)
-
-    return left_fit,right_fit
-
-
 def track_lanes_update(binary_warped, left_fit,right_fit):
 
     global window_search
@@ -403,15 +630,24 @@ def lane_fill_poly(binary_warped,undist,left_fit,right_fit,inverse_perspective_t
     pts = np.hstack((pts_left, pts_right))
 
     # Draw the lane 
+    
+    print(np.int_([pts]))
+    y=np.int_([pts])
+
+
+
     cv.fillPoly(color_warp, np.int_([pts]), (0,255, 0))
+    
+    
 
     # Warp using inverse perspective transform
     newwarp = cv.warpPerspective(color_warp, inverse_perspective_transform, (binary_warped.shape[1], binary_warped.shape[0])) 
     # overlay
     #newwarp = cv.cvtColor(newwarp, cv.COLOR_BGR2RGB)
     result = cv.addWeighted(undist, 1, newwarp, 0.3, 0)
+    
         
-    return result
+    return result,y
 
 
 def measure_curve(binary_warped,left_fit,right_fit):
@@ -449,23 +685,72 @@ def measure_curve(binary_warped,left_fit,right_fit):
 
 
 def vehicle_offset(img,left_fit,right_fit):
+    print("printing inside vehicle offset function")
+    print("Left fit",left_fit)
+
+    print("right fit",right_fit)
+    print()
     
     # THIS RATE CAN CHANGE GIVEN THE RESOLUTION OF THE CAMERA!!!!!
     # BE SURE TO CHANGE THIS IF USING DIFFERENT SIZE IMAGES!!!
+    global xm_per_pix
     xm_per_pix = 3.7/700 
     image_center = img.shape[1]/2
     
     ## find where lines hit the bottom of the image, closest to the car
     left_low = get_val(img.shape[0],left_fit)
     right_low = get_val(img.shape[0],right_fit)
+    print("left_low",left_low)
+    print("right low",right_low)
     
     # pixel coordinate for center of lane
     lane_center = (left_low+right_low)/2.0
     
     ## vehicle offset
+    cv2.imshow("Image center",img)
+    cv2.waitKey(0)
     distance = image_center - lane_center
+    print()
+    print()
+    print()
+    print("Image and lane centers",int(image_center),int(lane_center))
+    print()
+    print()
+    print()
+    print()
     
     ## convert to metric
-    return (round(distance*xm_per_pix,5))
+    return (round(distance*xm_per_pix,5)),[image_center,lane_center]
 
 
+def obstacle_offset(img,left_fit,right_fit):
+    
+    # THIS RATE CAN CHANGE GIVEN THE RESOLUTION OF THE CAMERA!!!!!
+    # BE SURE TO CHANGE THIS IF USING DIFFERENT SIZE IMAGES!!!
+    global xm_per_pix
+    xm_per_pix = 3.7/700 
+    image_center = img.shape[1]/2
+    
+    ## find where lines hit the bottom of the image, closest to the car
+    left_low = get_val(img.shape[0],left_fit)
+    right_low = get_val(img.shape[0],right_fit)
+    print("left_low",left_low)
+    print("right low",right_low)
+    
+    # pixel coordinate for center of lane
+    global lane_center
+    lane_center = (left_low+right_low)/2.0
+    
+    ## vehicle offset
+    distance = image_center - lane_center
+    print()
+    print()
+    print()
+    print("Image and lane centers",int(image_center),int(lane_center))
+    print()
+    print()
+    print()
+    print()
+    
+    ## convert to metric
+    return (round(distance*xm_per_pix,5)),[image_center,lane_center]

@@ -70,6 +70,10 @@ class TFNet(object):
 		self.graph = tf.Graph()
 		device_name = FLAGS.gpuName \
 			if FLAGS.gpu > 0.0 else None
+		print("Testing device_name",device_name)
+		gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.7)
+		sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+
 		with tf.device(device_name):
 			with self.graph.as_default() as g:
 				self.build_forward()

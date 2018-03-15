@@ -1,0 +1,4 @@
+l=[[1,2],[3,4]]
+f=open("t.txt","w")
+f.write(l)
+f.close()
