@@ -1,1 +1,1 @@
-web: gunicorn blindfolded.wsgi 
+web: gunicorn app: blindfolded.wsgi 
