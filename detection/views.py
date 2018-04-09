@@ -100,10 +100,10 @@ def findObstaclesInPath(nearest_obstacle):
     print(nearest_obstacle['middle_y'])
     print()
     print("nearest_obstacle",nearest_obstacle['middle_x'])
-    if(int(nearest_obstacle['middle_x']) in range(int(left_low)-10,int(right_low)+10)):
-        return "Obstacle in your path at a distance of " + str(int(nearest_obstacle['distance']))
+    if(int(nearest_obstacle['middle_x']) in range(int(left_low),int(right_low)+1)) and int(nearest_obstacle['distance'])<=300 :
+        return "Obstacle in your path at a distance of " + str(int(nearest_obstacle['distance']))+"   "
     else:
-        return "Nearest Obstacle is not in your path"
+        return "No Nearest Obstacle is in your path"
 
 
 

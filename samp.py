@@ -3,6 +3,7 @@ import requests
 import urllib
 import cv2
 import json
+import pyttsx3
 
 # define the URL to our face detection API
 url = "http://localhost:8000/detect/"
@@ -24,19 +25,22 @@ while(True):
     count=count+1
     print(count)
 '''
-for i in range(1,2):
+for i in range(1,4):
     files = {'media': open("frame%d.jpg"%i, 'rb')}
     #files = {'media': open("frame1.jpg", 'rb')}
     r = requests.post(url, files=files).json()
+
+    engine = pyttsx3.init()
+    engine.setProperty('rate',100)
+    engine.setProperty('volume',1)
+
+    engine.say(r['offset'])
+    engine.runAndWait()
+    engine.say(r['obstacles'])
+    engine.runAndWait()
+
     print(str(r))
 
-import pyttsx3
-engine = pyttsx3.init()
-engine.setProperty('rate',30)
-engine.say(r['offset'])
-engine.runAndWait()
-engine.say(r['obstacles'])
-engine.runAndWait()
 
 
 
