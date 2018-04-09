@@ -24,10 +24,19 @@ while(True):
     count=count+1
     print(count)
 '''
-for i in range(1,7):
+for i in range(1,2):
+    files = {'media': open("frame%d.jpg"%i, 'rb')}
+    #files = {'media': open("frame1.jpg", 'rb')}
+    r = requests.post(url, files=files).json()
+    print(str(r))
 
-	files = {'media': open("test%d.jpg"%i, 'rb')}
-	r = requests.post(url, files=files).json()
+import pyttsx3
+engine = pyttsx3.init()
+engine.setProperty('rate',30)
+engine.say(r['offset'])
+engine.runAndWait()
+engine.say(r['obstacles'])
+engine.runAndWait()
 
 
 
@@ -40,8 +49,8 @@ for i in range(1,7):
     
 
 
-print(str(r))
-print("{}".format(r))
+#print(str(r))
+#print("{}".format(r))
 '''
 # loop over the faces and draw them on the image
 for (startX, startY, endX, endY) in r["faces"]:

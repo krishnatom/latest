@@ -2,7 +2,7 @@ from django.shortcuts import render
 
 # Create your views here.
 from django.views.decorators.csrf import csrf_exempt
-
+from scipy.spatial.distance import *
 from django.http import JsonResponse
 import numpy as np
 import urllib.request
@@ -18,6 +18,8 @@ import glob
 import threading
 from darkflow.net.build import TFNet 
 import math
+import imutils
+
 # define the path to the face detector
 '''fourcc = cv2.VideoWriter_fourcc(*'XVID')
 out = cv2.VideoWriter('output.mp4',fourcc, 20.0, (640,480))'''
@@ -26,7 +28,7 @@ out = cv2.VideoWriter('output.mp4',fourcc, 20.0, (640,480))'''
 #global pt
 class Obstacles:
     def assign(self,label=None,confidence=None,topleft_x=None,topleft_y=None,bottomright_x=None,bottomright_y=None):
-        print("testing assugn")
+        
         self.label=label
         self.confidence=confidence
         self.topleft_x=topleft_x
@@ -45,8 +47,6 @@ class Obstacles:
         
     
     def assign_dist(self,distance=None):
-        print("Assign Distance Function called  ",distance)
-        print()
         self.distance=distance
 
     '''def assign_offset(self):
@@ -56,13 +56,11 @@ class Obstacles:
 
 
     def contents(self):
-        print("testing contents")
         print("label",self.label,"\nconfidence",self.confidence,"\ntopleft",self.topleft_x,"topleft_y",self.topleft_y,
             "bottomright_x",self.bottomright_x,"bottomright_y",self.bottomright_y,"middle_x",self.middle_x,"middle_y",self.middle_y,"distance",self.distance)
 
     
 def calc_middle(x,y):
-    print("calc_middle function is called  ",int((x+y)/2))
     return int((x+y)/2)
 
 
@@ -71,31 +69,48 @@ def calc_middle(x,y):
     
 def calc_distance(x,y):
     a=np.array([x,y])
-    print("calc_distance function is called   ",pt,x,y)
-    try:
-        distance=np.linalg.norm(pt-a)
-    except Exception as e:
-        print("Exception in calc distance")
-        print(e)
-    return distance
+    return euclidean(pt,a)
 
 
 
 def find_nearest_obstacle(lst):
-    print("nearest Obstacles function is called")
     try:
         obj=[]
         for l in lst:
             obj.append(l.__dict__)
         from operator import itemgetter
         nearest_obstacle=sorted(obj,key=itemgetter('distance'))
-        for k in nearest_obstacle:
-            print("Obstacle sorted by distance")
-            print(k)
     except Exception as e:
         print(e)
         return None
     return nearest_obstacle[0]
+
+def getOffsetStatus():
+    if  offset <-0.5 :
+        return "Getting off the lane on Right side "
+    elif offset > 0.5 :
+        return "Getting off the line on left side"
+    else:
+        return "Inside the lane "
+
+
+def findObstaclesInPath(nearest_obstacle):
+    print(nearest_obstacle)
+    print(nearest_obstacle['middle_x'])
+    print(nearest_obstacle['middle_y'])
+    print()
+    print("nearest_obstacle",nearest_obstacle['middle_x'])
+    if(int(nearest_obstacle['middle_x']) in range(int(left_low)-10,int(right_low)+10)):
+        return "Obstacle in your path at a distance of " + str(int(nearest_obstacle['distance']))
+    else:
+        return "Nearest Obstacle is not in your path"
+
+
+
+    
+
+
+
 
 
 
@@ -113,14 +128,6 @@ camera_img_size = camera['imagesize']
 options = {"model": "cfg/yolo.cfg", "load": "bin/yolo.weights", "threshold": 0.1}
 
 
-print("camera calibration.pkl contents\n",camera)
-print()
-print()
-print()
-print()
-print()
-print()
-print()
 tfnet = TFNet(options)
 
 #global first_frame
@@ -129,6 +136,7 @@ tfnet = TFNet(options)
 def detect(request):
     s=str(request.method)
     fil=[]
+    print("request files",request.FILES)
     for x in request.FILES:
         fil.append(str(request.FILES[x]))
     for y in fil:
@@ -136,57 +144,38 @@ def detect(request):
         
         from time import time
         t1=time()
-        im=cv2.resize(cv.imread(y),(1280,720))
-        obj,lst=object_detect(im)
-        print(time()-t1)
-        print("before calling lane detection function")
-        print()
-        print()
-        print()
-        img=lanedetect(obj)
-        print("After lane deetection function")
-        try:
-            print("the object list",lst)
-            print()
-            try:
-                print("length of object list",len(lst))
-            except Exception as e:
-                print(e)
-            print()
-            print()
-        except Exception as e:
-            print(e)
+        im=cv.imread(y)
 
+        #im=imutils.rotate(im,-90)
+        #im=im[im.shape[1]//2:,:]
+        obj,lst=object_detect(im)
+        tobj=obj
+        tobj=imutils.rotate(tobj,-90)
+
+
+        print("time for object detection",time()-t1)
+        
+        img=lanedetect(tobj)
+        #img=imutils.rotate(img,90)
+
+        
         for l in lst:
-            print("Obstacle assigning middle vertex to object.......")
-            print("Obstacles  ",l.label,"\n")
             l.assign_dist(calc_distance(l.middle_x,l.middle_y))
             #l.assign_offset()
 
-            print("Inside the detect main function")
-            l.contents()
+            
 
-        print("Printing all distances")
-        for l in lst:
-            print("distance of obstacles")
-            print(l.distance)
+        
+        
         try:
-            print("Printing lst")
-            print(lst)
-            print(type(lst))
             nearest_obstacle=find_nearest_obstacle(lst)
-            print("printing nearest obstacle information\n")
-            print(nearest_obstacle)
-            print()
+            
         except Exception as e:
             print("In calling function")
             print(e)
+        
         try:
-            print(type(nearest_obstacle))
-        except Exception as e:
-            print(e)
-        try:
-            cv2.line(img,(int(pt[0]),int(pt[1])),(nearest_obstacle['middle_x'],nearest_obstacle['middle_y']),5)
+            cv2.line(obj,(int(pt[0]),int(pt[1])),(nearest_obstacle['middle_x'],nearest_obstacle['middle_y']),5)
             
         except Exception as e:
             print(e)
@@ -198,17 +187,17 @@ def detect(request):
 
 
 
-        cv2.imshow("image",img)
+        cv2.imshow("image",obj)
         cv2.waitKey(0)
     data = {"success": False,"hiii":"hello","method":s,"File":fil}
  
 
-    if request.method == "POST":
-        data['success']=True
+    
+    data['offset']=getOffsetStatus()
+    data['obstacles']=findObstaclesInPath(nearest_obstacle)
+    
+    
     return JsonResponse(data)
-
-
-
 
 
 
@@ -218,17 +207,12 @@ def object_detect(frame=None):
     lst = [Obstacles() for i in range(len(result))]
     count=0
     for results in result:
-        print(results)
+        
         lst[count].assign(results['label'],results['confidence'],results['topleft']['x'],results['topleft']['y'],results['bottomright']['x'],results['bottomright']['y'])
         
         cv2.rectangle(frame, (results['topleft']['x'], results['topleft']['y']), (results['bottomright']['x'], results['bottomright']['y']),(255,0,0), 2)
         cv2.putText(frame,str(results['label']),(results['topleft']['x'], results['topleft']['y']), font, 1, (0,0,0), 1, cv2.LINE_AA)
-        print("Successfully drawn the bounding box for obstacle number",count)
         count=count+1
-    print("Exiting the object detect function")
-    print()
-    print()
-    print()
     return frame,lst
 
 
@@ -237,12 +221,16 @@ def lanedetect(img):
     global curve_radius
     global offset
     undist = distort_correct(img,mtx,dist,camera_img_size)
+    #undist=imutils.rotate(undist,-180)
     # get binary image
     binary_img = binary_pipeline(undist)
+    #binary_img=imutils.rotate(binary_img,-90)
     #perspective transform
     birdseye, inverse_perspective_transform = warp_image(binary_img)
+    #cv2.imshow("birdseye",birdseye)
+    #cv2.waitKey(0)
     left_fit,right_fit = track_lanes_initialize(birdseye)
-    print("left_fit:",[int(x) for x in left_fit],"\nright fit",[int(y) for y in right_fit])
+    
     
     
     global pt
@@ -250,51 +238,19 @@ def lanedetect(img):
     processed_frame , temp= lane_fill_poly(birdseye, undist, left_fit, right_fit,inverse_perspective_transform)
     curve_radius = measure_curve(birdseye,left_fit,right_fit)
     offset,pt = vehicle_offset(undist, left_fit, right_fit)
-    try:
-        cv2.circle(processed_frame,(int(pt[0]),int(pt[1])), 50, (255,0,0), -1)
-        cv.imshow("processed_frame",processed_frame)
-        cv.waitKey(0)
-    except:
-        print()
-        print()
-        print("Error marking the center camera location ",  int(pt[0]),int(pt[1]))
-        print()
-        print()
-        print()
-
-    print()
-    print()
-    print("Length of list",len(temp))
-    print(temp)
-    print()
-    print()
+    
     d=[]
     for t in temp:
-        print("Outer loop",len(t))
-        print(t)
-        print()
         for u in t:
-            print("second loop",len(u))
-            print()
             d=t[0]
             break;
 
-    print("value of d",type(d))
-    fi=open("tem.txt","w")
-    for b in d:
-        fi.write(str(b)+"\n")
-    fi.close()
+    
     try:
         mini=np.amin(d,axis=0)
         maxi=np.amax(d,axis=0)
     except:
         print("\n error finding min and max")
-    print("Minimun vertex",mini)
-    print()
-    print()
-    print("Maximum Vertices",maxi)
-    print()
-    print()
     cv2.rectangle(processed_frame, (mini[0]-100,mini[1]), (maxi[0]-100,maxi[1]),(255,0,0), 2)
     #for x in d:
      #   cv2.circle(processed_frame,(x[0],x[1]), 10, (255,0,0), -1)
@@ -302,15 +258,11 @@ def lanedetect(img):
         
     #printing information to frame
     font = cv.FONT_HERSHEY_TRIPLEX
+    processed_frame=imutils.rotate(processed_frame,90)
     processed_frame = cv.putText(processed_frame, 'Radius: '+str(curve_radius)+' m', (30, 40), font, 1, (0,255,0), 2)
     processed_frame = cv.putText(processed_frame, 'Offset: '+str(offset)+' m', (30, 80), font, 1, (0,255,0), 2)
+    
    
-    print("Exiting the lane detect function")
-    print()
-    print()
-    print()
-    print()
-    print()
     return processed_frame
 
 
@@ -366,6 +318,8 @@ def track_lanes_initialize(binary_warped):
         win_xright_high = rightx_current + margin
         # Draw the windows on the visualization image
         cv.rectangle(out_img,(win_xleft_low,win_y_low),(win_xleft_high,win_y_high),(0,255,0), 3) 
+        #cv2.imshow("boxes",out_img)
+        #cv2.waitKey(0)
         
         win_left.append([int((win_xleft_low+win_xleft_high)/2),int((win_y_low+win_y_high)/2)])
         cv.rectangle(out_img,(win_xright_low,win_y_low),(win_xright_high,win_y_high),(0,255,0), 3) 
@@ -426,9 +380,11 @@ def track_lanes_initialize(binary_warped):
 
 
 def distort_correct(img,mtx,dist,camera_img_size):
+    img=cv2.resize(img,(1280,720))
     img_size1 = (img.shape[1],img.shape[0])
-    #print(img_size1)
-    #print(camera_img_size)
+
+
+    
     assert (img_size1 == camera_img_size),'image size is not compatible'
     undist = cv.undistort(img, mtx, dist, None, mtx)
     return undist
@@ -534,9 +490,15 @@ def warp_image(img):
     image_size = (img.shape[1], img.shape[0])
     x = img.shape[1]
     y = img.shape[0]
+    
+    #source_points = np.floor(np.float32([[x[0], y[0]], [x[1], y[1]],[x[2], y[2]], [x[3], y[3]]]) / 4)
+
+    #destination_points = np.floor(np.float32([[X[0], Y[0]], [X[1], Y[1]],[X[2], Y[2]], [X[3], Y[3]]]) / 4)
 
     #the "order" of points in the polygon you are defining does not matter
     #but they need to match the corresponding points in destination_points!
+    '''
+
     source_points = np.float32([
     [0.117 * x, y],
     [(0.5 * x) - (x*0.078), (2/3)*y],
@@ -544,20 +506,24 @@ def warp_image(img):
     [x - (0.117 * x), y]
     ])
 
-#     #chicago footage
-#     source_points = np.float32([
-#                 [300, 720],
-#                 [500, 600],
-#                 [700, 600],
-#                 [850, 720]
-#                 ])
-    
-#     destination_points = np.float32([
-#                 [200, 720],
-#                 [200, 200],
-#                 [1000, 200],
-#                 [1000, 720]
-#                 ])
+      #chicago footage
+    x = [ 0, 1280,1280,0]
+    y = [ 520,520,0,0]
+    X = [ int(0.25*1280),int(0.25*1280),1280-int(0.25*1280),1280-int(0.25*1280)]
+    Y = [ 720,0,0,720]
+    #X = [150, 1100, 0, 1500,]
+    #Y = [720, 720, 0, 0]
+
+    source_points = np.floor(np.float32([[x[0], y[0]], [x[1], y[1]],[x[2], y[2]], [x[3], y[3]]]) / 4)
+
+    destination_points = np.floor(np.float32([[X[0], Y[0]], [X[1], Y[1]],[X[2], Y[2]], [X[3], Y[3]]]) / 4)
+    '''
+    source_points = np.float32([
+                 [0+100, y-100],
+                 [x-100, y-100],
+                 [x-100, 0+100],
+                 [0+100, 0+100]
+                 ])
     
     destination_points = np.float32([
     [0.25 * x, y],
@@ -565,15 +531,27 @@ def warp_image(img):
     [x - (0.25 * x), 0],
     [x - (0.25 * x), y]
     ])
+    '''
+ destination_points = np.float32([
+                 [200, 720],
+                 [200, 200],
+                 [1000, 200],
+                 [1000, 720]
+                 ])
+  
+    '''
+        
+    #cv2.line(img,(int(pt[0]),int(pt[1])),(nearest_obstacle['middle_x'],nearest_obstacle['middle_y']),5)
     
-    perspective_transform = cv.getPerspectiveTransform(source_points, destination_points)
+    perspectivce_transform = cv.getPerspectiveTransform(source_points, destination_points)
+    
+    #cv2.imshow("SRC",t)
+    #cv2.waitKey(0)
     inverse_perspective_transform = cv.getPerspectiveTransform( destination_points, source_points)
-    
-    warped_img = cv.warpPerspective(img, perspective_transform, image_size, flags=cv.INTER_LINEAR)
-    
-    #print(source_points)
-    #print(destination_points)
-    
+    warped_img = cv.warpPerspective(img,perspectivce_transform, image_size, flags=cv.INTER_LINEAR)
+
+    #cv2.imshow("warpPerspective",warped_img)
+    #cv2.waitKey(0)
     return warped_img, inverse_perspective_transform
 
 
@@ -582,7 +560,7 @@ def track_lanes_update(binary_warped, left_fit,right_fit):
     global window_search
     global frame_count
     
-    # repeat window search to maintain stability
+    
     if frame_count % 10 == 0:
         window_search=True
    
@@ -615,7 +593,7 @@ def get_val(y,poly_coeff):
 
 def lane_fill_poly(binary_warped,undist,left_fit,right_fit,inverse_perspective_transform):
     
-    # Generate x and y values
+    
     ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0] )
     left_fitx = get_val(ploty,left_fit)
     right_fitx = get_val(ploty,right_fit)
@@ -631,12 +609,12 @@ def lane_fill_poly(binary_warped,undist,left_fit,right_fit,inverse_perspective_t
 
     # Draw the lane 
     
-    print(np.int_([pts]))
+    
     y=np.int_([pts])
 
 
 
-    cv.fillPoly(color_warp, np.int_([pts]), (0,255, 0))
+    cv.fillPoly(color_warp, np.int_([pts]), (0,255,0))
     
     
 
@@ -645,7 +623,6 @@ def lane_fill_poly(binary_warped,undist,left_fit,right_fit,inverse_perspective_t
     # overlay
     #newwarp = cv.cvtColor(newwarp, cv.COLOR_BGR2RGB)
     result = cv.addWeighted(undist, 1, newwarp, 0.3, 0)
-    
         
     return result,y
 
@@ -685,72 +662,30 @@ def measure_curve(binary_warped,left_fit,right_fit):
 
 
 def vehicle_offset(img,left_fit,right_fit):
-    print("printing inside vehicle offset function")
-    print("Left fit",left_fit)
-
-    print("right fit",right_fit)
-    print()
     
     # THIS RATE CAN CHANGE GIVEN THE RESOLUTION OF THE CAMERA!!!!!
     # BE SURE TO CHANGE THIS IF USING DIFFERENT SIZE IMAGES!!!
     global xm_per_pix
     xm_per_pix = 3.7/700 
     image_center = img.shape[1]/2
+    global left_low
+    global right_low
     
     ## find where lines hit the bottom of the image, closest to the car
     left_low = get_val(img.shape[0],left_fit)
     right_low = get_val(img.shape[0],right_fit)
-    print("left_low",left_low)
-    print("right low",right_low)
+    print("Left low",left_low,"\nRight low",right_low)
+    print()
+    
     
     # pixel coordinate for center of lane
     lane_center = (left_low+right_low)/2.0
     
     ## vehicle offset
-    cv2.imshow("Image center",img)
-    cv2.waitKey(0)
+    #cv2.imshow("Image center",img)
+    #cv2.waitKey(0)
     distance = image_center - lane_center
-    print()
-    print()
-    print()
-    print("Image and lane centers",int(image_center),int(lane_center))
-    print()
-    print()
-    print()
-    print()
     
     ## convert to metric
     return (round(distance*xm_per_pix,5)),[image_center,lane_center]
 
-
-def obstacle_offset(img,left_fit,right_fit):
-    
-    # THIS RATE CAN CHANGE GIVEN THE RESOLUTION OF THE CAMERA!!!!!
-    # BE SURE TO CHANGE THIS IF USING DIFFERENT SIZE IMAGES!!!
-    global xm_per_pix
-    xm_per_pix = 3.7/700 
-    image_center = img.shape[1]/2
-    
-    ## find where lines hit the bottom of the image, closest to the car
-    left_low = get_val(img.shape[0],left_fit)
-    right_low = get_val(img.shape[0],right_fit)
-    print("left_low",left_low)
-    print("right low",right_low)
-    
-    # pixel coordinate for center of lane
-    global lane_center
-    lane_center = (left_low+right_low)/2.0
-    
-    ## vehicle offset
-    distance = image_center - lane_center
-    print()
-    print()
-    print()
-    print("Image and lane centers",int(image_center),int(lane_center))
-    print()
-    print()
-    print()
-    print()
-    
-    ## convert to metric
-    return (round(distance*xm_per_pix,5)),[image_center,lane_center]
